@@ -125,6 +125,13 @@ export default function TestingPage() {
           <p className="text-muted-foreground text-lg">
             Prueba la API SQLtoCSV ejecutando consultas SQL y exportando los resultados a CSV
           </p>
+          <Alert className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Modo Demostración:</strong> Esta versión usa datos de ejemplo para mostrar la funcionalidad. En
+              producción, se conectaría directamente a tu base de datos usando las credenciales que proporciones.
+            </AlertDescription>
+          </Alert>
         </div>
 
         <div className="grid lg:grid-cols-3 gap-6">

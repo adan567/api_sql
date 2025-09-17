@@ -1,10 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { createDatabaseConnection } from "@/lib/database"
+import { createDatabaseConnection, validateConnectionString } from "@/lib/database"
 import { convertToCSV } from "@/lib/csv-utils"
 
 export async function POST(request: NextRequest) {
   try {
     const { query, connectionString, dbType } = await request.json()
+
+    console.log("[v0] Received SQL execution request:", { dbType, queryLength: query?.length })
 
     // Validar parámetros requeridos
     if (!query || !connectionString || !dbType) {
@@ -17,7 +19,22 @@ export async function POST(request: NextRequest) {
     // Validar que la consulta sea de tipo SELECT (por seguridad)
     const trimmedQuery = query.trim().toLowerCase()
     if (!trimmedQuery.startsWith("select")) {
-      return NextResponse.json({ error: "Solo se permiten consultas SELECT por razones de seguridad" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Solo se permiten consultas SELECT por razones de seguridad",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Validar formato del connection string
+    if (!validateConnectionString(dbType, connectionString)) {
+      return NextResponse.json(
+        {
+          error: "Formato de connection string inválido",
+        },
+        { status: 400 },
+      )
     }
 
     const startTime = Date.now()
@@ -36,6 +53,8 @@ export async function POST(request: NextRequest) {
     // Convertir los datos a CSV
     const csvData = convertToCSV(data)
 
+    console.log("[v0] Query executed successfully:", { rowCount: data.length, executionTime })
+
     return NextResponse.json({
       data,
       csvData,
@@ -44,7 +63,7 @@ export async function POST(request: NextRequest) {
       success: true,
     })
   } catch (error) {
-    console.error("Error ejecutando consulta SQL:", error)
+    console.error("[v0] Error ejecutando consulta SQL:", error)
 
     return NextResponse.json(
       {

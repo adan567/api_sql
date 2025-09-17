@@ -3,173 +3,71 @@ export interface DatabaseConnection {
   close(): Promise<void>
 }
 
-class PostgreSQLConnection implements DatabaseConnection {
-  private client: any
-
-  constructor(connectionString: string) {
-    const { Client } = require("pg")
-    this.client = new Client({ connectionString })
-  }
-
-  async executeQuery(query: string): Promise<any[]> {
-    await this.client.connect()
-    const result = await this.client.query(query)
-    return result.rows
-  }
-
-  async close(): Promise<void> {
-    await this.client.end()
-  }
+export interface DatabaseConfig {
+  type: "postgresql" | "mysql" | "sqlite" | "mssql"
+  connectionString: string
 }
 
-class MySQLConnection implements DatabaseConnection {
-  private connection: any
+// Mock implementation for demonstration - users will integrate with their own backends
+class MockDatabaseConnection implements DatabaseConnection {
+  private dbType: string
+  private connectionString: string
 
-  constructor(connectionString: string) {
-    const mysql = require("mysql2/promise")
-    // Parse connection string for MySQL
-    const url = new URL(connectionString.replace("mysql://", "http://"))
-    this.connection = mysql.createConnection({
-      host: url.hostname,
-      port: Number.parseInt(url.port) || 3306,
-      user: url.username,
-      password: url.password,
-      database: url.pathname.slice(1),
-    })
+  constructor(dbType: string, connectionString: string) {
+    this.dbType = dbType
+    this.connectionString = connectionString
   }
 
   async executeQuery(query: string): Promise<any[]> {
-    const [rows] = await this.connection.execute(query)
-    return rows as any[]
+    // Simulate database query execution
+    console.log(`[v0] Executing ${this.dbType} query:`, query)
+
+    // Return mock data for demonstration
+    const mockData = [
+      { id: 1, name: "John Doe", email: "john@example.com", created_at: "2024-01-15" },
+      { id: 2, name: "Jane Smith", email: "jane@example.com", created_at: "2024-01-16" },
+      { id: 3, name: "Bob Johnson", email: "bob@example.com", created_at: "2024-01-17" },
+    ]
+
+    // Simulate network delay
+    await new Promise((resolve) => setTimeout(resolve, 500))
+
+    return mockData
   }
 
   async close(): Promise<void> {
-    await this.connection.end()
-  }
-}
-
-class SQLiteConnection implements DatabaseConnection {
-  private db: any
-
-  constructor(connectionString: string) {
-    const sqlite3 = require("sqlite3").verbose()
-    // Extract database path from connection string
-    const dbPath = connectionString.replace("sqlite://", "").replace("sqlite3://", "")
-    this.db = new sqlite3.Database(dbPath)
-  }
-
-  async executeQuery(query: string): Promise<any[]> {
-    return new Promise((resolve, reject) => {
-      this.db.all(query, [], (err: any, rows: any[]) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve(rows)
-        }
-      })
-    })
-  }
-
-  async close(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      this.db.close((err: any) => {
-        if (err) {
-          reject(err)
-        } else {
-          resolve()
-        }
-      })
-    })
-  }
-}
-
-class SQLServerConnection implements DatabaseConnection {
-  private connection: any
-  private config: any
-
-  constructor(connectionString: string) {
-    const { ConnectionPool } = require("tedious")
-    // Parse SQL Server connection string
-    const url = new URL(connectionString.replace("mssql://", "http://"))
-    this.config = {
-      server: url.hostname,
-      port: Number.parseInt(url.port) || 1433,
-      authentication: {
-        type: "default",
-        options: {
-          userName: url.username,
-          password: url.password,
-        },
-      },
-      options: {
-        database: url.pathname.slice(1),
-        encrypt: true,
-        trustServerCertificate: true,
-      },
-    }
-  }
-
-  async executeQuery(query: string): Promise<any[]> {
-    const { ConnectionPool, Request } = require("tedious")
-    const pool = new ConnectionPool(this.config)
-
-    return new Promise((resolve, reject) => {
-      pool.on("connect", () => {
-        const request = new Request(query, (err: any) => {
-          if (err) {
-            reject(err)
-          }
-        })
-
-        const rows: any[] = []
-        request.on("row", (columns: any[]) => {
-          const row: any = {}
-          columns.forEach((column) => {
-            row[column.metadata.colName] = column.value
-          })
-          rows.push(row)
-        })
-
-        request.on("requestCompleted", () => {
-          resolve(rows)
-          pool.close()
-        })
-
-        pool.execSql(request)
-      })
-
-      pool.on("connectFailed", (err: any) => {
-        reject(err)
-      })
-
-      pool.connect()
-    })
-  }
-
-  async close(): Promise<void> {
-    // Connection is closed in executeQuery for SQL Server
+    console.log(`[v0] Closing ${this.dbType} connection`)
     return Promise.resolve()
   }
 }
 
 export async function createDatabaseConnection(dbType: string, connectionString: string): Promise<DatabaseConnection> {
-  switch (dbType.toLowerCase()) {
-    case "postgresql":
-    case "postgres":
-      return new PostgreSQLConnection(connectionString)
+  // Validate database type
+  const supportedTypes = ["postgresql", "postgres", "mysql", "sqlite", "sqlite3", "mssql", "sqlserver"]
 
-    case "mysql":
-      return new MySQLConnection(connectionString)
+  if (!supportedTypes.includes(dbType.toLowerCase())) {
+    throw new Error(`Tipo de base de datos no soportado: ${dbType}`)
+  }
 
-    case "sqlite":
-    case "sqlite3":
-      return new SQLiteConnection(connectionString)
+  // Validate connection string format
+  if (!connectionString || connectionString.trim().length === 0) {
+    throw new Error("Connection string es requerido")
+  }
 
-    case "mssql":
-    case "sqlserver":
-      return new SQLServerConnection(connectionString)
+  // Return mock connection for demonstration
+  // In production, users would integrate this with their own database connections
+  return new MockDatabaseConnection(dbType, connectionString)
+}
 
-    default:
-      throw new Error(`Tipo de base de datos no soportado: ${dbType}`)
+export function validateConnectionString(dbType: string, connectionString: string): boolean {
+  try {
+    const url = new URL(connectionString.replace(/^(mysql|postgres|postgresql|sqlite|mssql):\/\//, "http://"))
+    return url.hostname !== null
+  } catch {
+    // For SQLite, it might just be a file path
+    if (dbType.toLowerCase().includes("sqlite")) {
+      return connectionString.length > 0
+    }
+    return false
   }
 }
